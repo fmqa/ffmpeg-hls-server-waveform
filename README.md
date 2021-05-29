@@ -11,10 +11,16 @@ This is an experimental patch for ffmpeg/libavformat 4.4 that adds some addition
 
 ## How?
 
-After applying the patch, you can try out something like:
+After applying the patch, you can try out something like (for VOD):
 
 ```
 ./ffmpeg -i /tmp/test.flac -f hls -hls_audio_peaks true -hls_playlist_type vod /tmp/stream.m3u8
+```
+
+For live HLS, the following may be used instead:
+
+```
+./ffmpeg -i "https://stream.nightride.fm/darksynth.m4a" -f hls -hls_audio_peaks true -hls_time 4 -hls_flags delete_segments /tmp/stream.m3u8
 ```
 
 ## What?
@@ -135,6 +141,30 @@ stream31.ts
 #EXT-X-PEAKDATA:8.0,7.8,7.9,7.9,7.9,7.9,7.9,8.0,7.9,7.9,7.9,8.0,7.9,7.9,7.9
 stream32.ts
 #EXT-X-ENDLIST
+```
+
+Live HLS playlists will include only the segments in the HLS window and the associated peak data:
+
+```
+#EXTM3U
+#EXT-X-VERSION:3
+#EXT-X-TARGETDURATION:4
+#EXT-X-MEDIA-SEQUENCE:3
+#EXTINF:4.017044,
+#EXT-X-PEAKDATA:1241.1,739.7,1305.5,1537.5,1343.1,652.4,1076.5,1711.9,1840.2,1233.5,702.3,797.6,1265.7,665.4,974.6,766.8,608.8,616.9,1441.6,1264.3,847.7,1006.6,1537.5,1662.4,804.8,1034.0,1540.8,1671.8,1536.2,745.9,991.3,1154.5,1286.4
+stream3.ts
+#EXTINF:3.993833,
+#EXT-X-PEAKDATA:805.2,1036.8,981.3,714.2,581.3,1494.3,1279.7,834.9,917.5,1129.0,1347.3,650.7,922.9,1347.5,1652.6,1646.7,628.2,1006.3,1506.9,935.9,1096.3,1073.0,797.5,622.7,1209.5,1240.3,857.2,947.4,2366.0,2382.5,1506.8,2204.9
+stream4.ts
+#EXTINF:3.993833,
+#EXT-X-PEAKDATA:4342.9,3881.5,4474.8,3494.4,2781.5,2637.7,2266.3,2119.5,2394.2,5040.3,3977.6,2262.5,2166.2,1807.3,915.0,2036.2,2120.2,1766.1,2812.1,5446.8,3512.0,2656.3,1695.5,1256.4,1676.7,1987.7,1215.4,2535.0,4435.8,5056.6,2255.4,1486.6
+stream5.ts
+#EXTINF:3.993833,
+#EXT-X-PEAKDATA:2248.7,980.3,1668.6,2002.1,1373.3,1167.5,5439.1,4361.0,2691.4,2145.5,1335.6,1097.0,2252.8,1647.2,2132.7,3668.4,5340.9,2753.3,1515.4,2135.1,1174.1,1678.2,2328.2,1876.6,1441.9,4960.8,4481.8,2849.8,1898.1,1139.0,883.8,2064.6
+stream6.ts
+#EXTINF:4.017056,
+#EXT-X-PEAKDATA:1576.9,2148.5,2508.5,5612.2,3740.6,1724.3,2041.9,1277.9,1563.9,2687.1,2914.5,1736.0,4236.2,5620.4,4809.0,5701.6,4805.3,2625.1,3428.7,2653.4,2520.2,2354.6,5226.9,4230.1,2006.5,1923.4,1504.5,837.5,2216.6,2283.4,1549.9,3397.0,5884.5
+stream7.ts
 ```
 
 # Disclaimer
