@@ -1,4 +1,4 @@
-From 06caca97c0fceb256ddc85bd7bb68e41f30d7b57 Mon Sep 17 00:00:00 2001
+From 13e281a4e9532d68423cd9f0d6b34db84c985b04 Mon Sep 17 00:00:00 2001
 From: "F. Moukayed" <7354509+fmqa@users.noreply.github.com>
 Date: Sat, 29 May 2021 12:52:03 +0000
 Subject: [PATCH] Add support of server-generated waveform data through a
@@ -7,8 +7,8 @@ Subject: [PATCH] Add support of server-generated waveform data through a
 ---
  libavformat/dashenc.c     |   2 +-
  libavformat/hlsenc.c      | 250 +++++++++++++++++++++++++++++++++++++-
- libavformat/hlsplaylist.c |  53 +++++++-
- 3 files changed, 301 insertions(+), 4 deletions(-)
+ libavformat/hlsplaylist.c |  48 +++++++-
+ 3 files changed, 296 insertions(+), 4 deletions(-)
 
 diff --git a/libavformat/dashenc.c b/libavformat/dashenc.c
 index 81a5c2b452..b2c8985140 100644
@@ -381,7 +381,7 @@ index 7d97ce1789..c341e23a79 100644
  };
  
 diff --git a/libavformat/hlsplaylist.c b/libavformat/hlsplaylist.c
-index 0e1dcc087f..dd06d5323a 100644
+index 0e1dcc087f..b068405092 100644
 --- a/libavformat/hlsplaylist.c
 +++ b/libavformat/hlsplaylist.c
 @@ -28,6 +28,17 @@
@@ -411,10 +411,11 @@ index 0e1dcc087f..dd06d5323a 100644
  {
      if (!out || !filename)
          return AVERROR(EINVAL);
-@@ -179,6 +190,46 @@ int ff_hls_write_file_entry(AVIOContext *out, int insert_discont,
+@@ -179,6 +190,41 @@ int ff_hls_write_file_entry(AVIOContext *out, int insert_discont,
          avio_printf(out, "#EXT-X-PROGRAM-DATE-TIME:%s.%03d%s\n", buf0, milli, buf1);
          *prog_date_time += duration;
      }
++
 +    if (peakfilename && *peakfilename && peakfd) {
 +        int ret;
 +        double buffer[BUFSIZ];
@@ -424,7 +425,7 @@ index 0e1dcc087f..dd06d5323a 100644
 +            *peakfd = avpriv_open(*peakfilename, O_RDONLY);
 +            if (*peakfd < 0) {
 +                av_log(NULL, AV_LOG_DEBUG, "open() error in ff_hls_write_file_entry\n");
-+                goto cleanup;
++                goto post_apio;
 +            }
 +        }
 +
@@ -443,18 +444,12 @@ index 0e1dcc087f..dd06d5323a 100644
 +        } else {
 +            av_log(NULL, AV_LOG_DEBUG, "close error in ff_hls_write_file_entry\n");
 +        }
-+cleanup:
-+        if (unlink(*peakfilename) == 0) {
-+            *peakfilename = NULL;
-+        } else {
-+            av_log(NULL, AV_LOG_DEBUG, "unlink error in ff_hls_write_file_entry\n");
-+        }
 +
 +        if (ret < 0) {
 +            av_log(NULL, AV_LOG_DEBUG, "read error in ff_hls_write_file_entry\n");
 +        }
 +    }
-+
++post_apio:
      if (baseurl)
          avio_printf(out, "%s", baseurl);
      avio_printf(out, "%s\n", filename);
