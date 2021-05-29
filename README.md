@@ -7,7 +7,7 @@ This is an experimental patch for ffmpeg/libavformat 4.4 that adds some addition
 ## Why?
 
 1) As a learning exercise in order to better understand the ffmpeg stack
-2) For feasibility testing whether it possible to use server-side generated audio visualizations in web applications (possibly in conjuction with [hls.js](https://github.com/video-dev/hls.js/)
+2) For testing whether it is feasible to use server-side generated audio visualizations in web applications (possibly in conjuction with [hls.js](https://github.com/video-dev/hls.js/)
 
 ## How?
 
