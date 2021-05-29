@@ -27,7 +27,7 @@ For live HLS, the following may be used instead:
 
 The following options are added to the HLS muxer:
 
-- `hls_audio_peaks true|false (defaults to false) => toggles waveform embedding in the HLS playlist`
+- `hls_audio_peaks false|true (defaults to false) => toggles waveform embedding in the HLS playlist`
 - `hls_audio_peaks_window <n> (defaults to n=1000) => window size for peak calculation`
 - `hls_audio_peaks_rate <n> (defaults to n=8000) => sample rate rate for peak calculation`
 
