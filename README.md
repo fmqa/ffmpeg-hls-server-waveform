@@ -19,7 +19,9 @@ After applying the patch, you can try out something like:
 
 ## What?
 
-- `hls_audio_peaks true|false => toggles waveform embedding in the HLS playlist`
+The following options are added to the HLS muxer:
+
+- `hls_audio_peaks true|false (defaults to false) => toggles waveform embedding in the HLS playlist`
 - `hls_audio_peaks_window <n> (defaults to n=1000) => sets the window size for peak calculation`
 
 ## How does it look like?
