@@ -27,7 +27,7 @@ The following options are added to the HLS muxer:
 
 ## How does it look like?
 
-Similar to the following. Each segment get an `EXT-X-PEAKDATA` containing a CSV row of data points that may be used for visualisation purposes.
+Like this. Each segment gets an `EXT-X-PEAKDATA` containing a CSV row of data points that may be used for visualisation purposes.
 
 ```
 #EXTM3U
