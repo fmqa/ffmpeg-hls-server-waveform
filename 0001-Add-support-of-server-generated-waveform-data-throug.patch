@@ -1,4 +1,4 @@
-From 871838702b5fdd81455c277db93cb839aa0d7a6d Mon Sep 17 00:00:00 2001
+From 64b662315bcf03643ca87b9e80f274d6f0998cd0 Mon Sep 17 00:00:00 2001
 From: "F. Moukayed" <7354509+fmqa@users.noreply.github.com>
 Date: Sat, 29 May 2021 12:52:03 +0000
 Subject: [PATCH] Add support of server-generated waveform data through a
@@ -24,7 +24,7 @@ index 81a5c2b452..b2c8985140 100644
              av_log(os->ctx, AV_LOG_WARNING, "ff_hls_write_file_entry get error\n");
          }
 diff --git a/libavformat/hlsenc.c b/libavformat/hlsenc.c
-index 7d97ce1789..936a944784 100644
+index 7d97ce1789..8e63dd1277 100644
 --- a/libavformat/hlsenc.c
 +++ b/libavformat/hlsenc.c
 @@ -44,6 +44,8 @@
@@ -82,14 +82,14 @@ index 7d97ce1789..936a944784 100644
                  goto fail;
          }
 +
-+        if (segment->peakfd >= 0 && close(segment->peakfd) < 0) {
++        if (segment->peakfd >= 0) {
 +            if (close(segment->peakfd) == 0) {
 +                segment->peakfd = -1;
 +            } else {
 +                av_log(hls, AV_LOG_DEBUG, "error closing segment peak buffer fd: %d\n", segment->peakfd);
 +            }
 +        }
-+        if (segment->peakfilename && unlink(segment->peakfilename) < 0) {
++        if (segment->peakfilename) {
 +            if (unlink(segment->peakfilename) == 0) {
 +                segment->peakfilename = NULL;
 +            } else {
