@@ -1,4 +1,4 @@
-# FFmpeg patch/extension for embedding waveform data in an HLS playlist
+# FFmpeg patch/extension for embedding waveform loudness data in an HLS playlist
 
 ## Synopsis
 
