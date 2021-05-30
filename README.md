@@ -171,7 +171,7 @@ stream7.ts
 For verification/demo purposes, we convert the peak output from the VOD example into a single-column, plottable CSV:
 
 ```
-grep '^#EXT-X-PEAKDATA:' /tmp/stream.m3u8 | cut -d: -f2 | tr -d '\n' | paste -s | tr , '\n' > /tmp/test.csv
+grep '^#EXT-X-PEAKDATA:' /tmp/stream.m3u8 | cut -d: -f2 | tr '\n' ',' | paste -s | tr ',' '\n' > /tmp/test.csv
 ```
 
 ![VOD pxample plot](plot-vod.png)
