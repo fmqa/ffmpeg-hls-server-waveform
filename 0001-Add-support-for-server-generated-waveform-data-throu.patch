@@ -1,4 +1,4 @@
-From 7c2015cdcaf1433377eb70bc328a64f08d4d4e9c Mon Sep 17 00:00:00 2001
+From 0f3b151bbbea339c01d071b62ca112922004007e Mon Sep 17 00:00:00 2001
 From: "F. Moukayed" <7354509+fmqa@users.noreply.github.com>
 Date: Sat, 29 May 2021 12:52:03 +0000
 Subject: [PATCH] Add support for server-generated waveform data through a
@@ -24,7 +24,7 @@ index 81a5c2b452..b2c8985140 100644
              av_log(os->ctx, AV_LOG_WARNING, "ff_hls_write_file_entry get error\n");
          }
 diff --git a/libavformat/hlsenc.c b/libavformat/hlsenc.c
-index 7d97ce1789..b63cdaa2ac 100644
+index 7d97ce1789..859d0b6f47 100644
 --- a/libavformat/hlsenc.c
 +++ b/libavformat/hlsenc.c
 @@ -44,6 +44,8 @@
@@ -127,7 +127,7 @@ index 7d97ce1789..b63cdaa2ac 100644
 +static inline double ssqri16(size_t n, const int16_t *xs)
 +{
 +    double sigma = 0.0;
-+    for (int i = 0; i < n; ++i) {
++    for (size_t i = 0; i < n; ++i) {
 +        sigma += pow(xs[i] / 32767.0, 2);
 +    }
 +    return sigma;
