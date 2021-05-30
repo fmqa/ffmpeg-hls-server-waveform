@@ -1,4 +1,4 @@
-From 5aae5a6cd911736cd5c0feb59d193b1ea57b360b Mon Sep 17 00:00:00 2001
+From 0da7109ad9356e83ff57a908a6166474479b839a Mon Sep 17 00:00:00 2001
 From: "F. Moukayed" <7354509+fmqa@users.noreply.github.com>
 Date: Sat, 29 May 2021 12:52:03 +0000
 Subject: [PATCH] Add support for server-generated waveform data through a
@@ -6,9 +6,9 @@ Subject: [PATCH] Add support for server-generated waveform data through a
 
 ---
  libavformat/dashenc.c     |   2 +-
- libavformat/hlsenc.c      | 261 +++++++++++++++++++++++++++++++++++++-
+ libavformat/hlsenc.c      | 262 +++++++++++++++++++++++++++++++++++++-
  libavformat/hlsplaylist.c |  48 ++++++-
- 3 files changed, 307 insertions(+), 4 deletions(-)
+ 3 files changed, 308 insertions(+), 4 deletions(-)
 
 diff --git a/libavformat/dashenc.c b/libavformat/dashenc.c
 index 81a5c2b452..b2c8985140 100644
@@ -24,7 +24,7 @@ index 81a5c2b452..b2c8985140 100644
              av_log(os->ctx, AV_LOG_WARNING, "ff_hls_write_file_entry get error\n");
          }
 diff --git a/libavformat/hlsenc.c b/libavformat/hlsenc.c
-index 7d97ce1789..5bf0ffd4d8 100644
+index 7d97ce1789..3d12f76603 100644
 --- a/libavformat/hlsenc.c
 +++ b/libavformat/hlsenc.c
 @@ -44,6 +44,8 @@
@@ -125,7 +125,7 @@ index 7d97ce1789..5bf0ffd4d8 100644
      HLSSegment *en = av_malloc(sizeof(*en));
      const char  *filename;
      int byterange_mode = (hls->flags & HLS_SINGLE_FILE) || (hls->max_seg_size > 0);
-@@ -1149,6 +1200,66 @@ static int hls_append_segment(struct AVFormatContext *s, HLSContext *hls,
+@@ -1149,6 +1200,67 @@ static int hls_append_segment(struct AVFormatContext *s, HLSContext *hls,
      en->next     = NULL;
      en->discont  = 0;
      en->discont_program_date_time = 0;
@@ -152,9 +152,10 @@ index 7d97ce1789..5bf0ffd4d8 100644
 +            size_t n = ret / sizeof(int16_t);
 +            rmsbuf[rmsidx] = 0.0;
 +            for (int i = 0; i < n; ++i) {
-+                rmsbuf[rmsidx] += apio->window[i] * apio->window[i];
++                rmsbuf[rmsidx] += pow(apio->window[i] / 32767.0, 2);
 +            }
-+            rmsbuf[rmsidx] = sqrt(rmsbuf[rmsidx] / n);
++            /* Compute window dBFS */
++            rmsbuf[rmsidx] = 20 * log10(sqrt(rmsbuf[rmsidx] / n)) + 3.0103;
 +            ++rmsidx;
 +            if (rmsidx >= BUFSIZ) {
 +                ret = write(en->peakfd, rmsbuf, rmsidx * sizeof(double));
@@ -192,7 +193,7 @@ index 7d97ce1789..5bf0ffd4d8 100644
  
      if (vs->discontinuity) {
          en->discont = 1;
-@@ -1316,6 +1427,20 @@ static void hls_free_segments(HLSSegment *p)
+@@ -1316,6 +1428,20 @@ static void hls_free_segments(HLSSegment *p)
  
      while (p) {
          en = p;
@@ -213,7 +214,7 @@ index 7d97ce1789..5bf0ffd4d8 100644
          p = p->next;
          av_freep(&en);
      }
-@@ -1624,7 +1749,7 @@ static int hls_window(AVFormatContext *s, int last, VariantStream *vs)
+@@ -1624,7 +1750,7 @@ static int hls_window(AVFormatContext *s, int last, VariantStream *vs)
                                        en->size, en->pos, hls->baseurl,
                                        en->filename,
                                        en->discont_program_date_time ? &en->discont_program_date_time : prog_date_time_p,
@@ -222,7 +223,7 @@ index 7d97ce1789..5bf0ffd4d8 100644
          if (en->discont_program_date_time)
              en->discont_program_date_time -= en->duration;
          if (ret < 0) {
-@@ -1647,7 +1772,7 @@ static int hls_window(AVFormatContext *s, int last, VariantStream *vs)
+@@ -1647,7 +1773,7 @@ static int hls_window(AVFormatContext *s, int last, VariantStream *vs)
          for (en = vs->segments; en; en = en->next) {
              ret = ff_hls_write_file_entry(hls->sub_m3u8_out, 0, byterange_mode,
                                            en->duration, 0, en->size, en->pos,
@@ -231,7 +232,7 @@ index 7d97ce1789..5bf0ffd4d8 100644
              if (ret < 0) {
                  av_log(s, AV_LOG_WARNING, "ff_hls_write_file_entry get error\n");
              }
-@@ -2673,6 +2798,47 @@ static int hls_write_packet(AVFormatContext *s, AVPacket *pkt)
+@@ -2673,6 +2799,47 @@ static int hls_write_packet(AVFormatContext *s, AVPacket *pkt)
      vs->packets_written++;
      if (oc->pb) {
          int64_t keyframe_pre_pos = avio_tell(oc->pb);
@@ -279,7 +280,7 @@ index 7d97ce1789..5bf0ffd4d8 100644
          ret = ff_write_chained(oc, stream_index, pkt, s, 0);
          if ((st->codecpar->codec_type == AVMEDIA_TYPE_VIDEO) &&
              (pkt->flags & AV_PKT_FLAG_KEY) && !keyframe_pre_pos) {
-@@ -2712,6 +2878,37 @@ static void hls_deinit(AVFormatContext *s)
+@@ -2712,6 +2879,37 @@ static void hls_deinit(AVFormatContext *s)
          av_freep(&vs->streams);
      }
  
@@ -317,7 +318,7 @@ index 7d97ce1789..5bf0ffd4d8 100644
      ff_format_io_close(s, &hls->m3u8_out);
      ff_format_io_close(s, &hls->sub_m3u8_out);
      av_freep(&hls->key_basename);
-@@ -2925,6 +3122,63 @@ static int hls_init(AVFormatContext *s)
+@@ -2925,6 +3123,63 @@ static int hls_init(AVFormatContext *s)
          }
      }
  
@@ -381,7 +382,7 @@ index 7d97ce1789..5bf0ffd4d8 100644
      if ((hls->start_sequence_source_type == HLS_START_SEQUENCE_AS_SECONDS_SINCE_EPOCH) ||
          (hls->start_sequence_source_type == HLS_START_SEQUENCE_AS_MICROSECONDS_SINCE_EPOCH) ||
          (hls->start_sequence_source_type == HLS_START_SEQUENCE_AS_FORMATTED_DATETIME)) {
-@@ -3180,6 +3434,9 @@ static const AVOption options[] = {
+@@ -3180,6 +3435,9 @@ static const AVOption options[] = {
      {"timeout", "set timeout for socket I/O operations", OFFSET(timeout), AV_OPT_TYPE_DURATION, { .i64 = -1 }, -1, INT_MAX, .flags = E },
      {"ignore_io_errors", "Ignore IO errors for stable long-duration runs with network output", OFFSET(ignore_io_errors), AV_OPT_TYPE_BOOL, { .i64 = 0 }, 0, 1, E },
      {"headers", "set custom HTTP headers, can override built in default headers", OFFSET(headers), AV_OPT_TYPE_STRING, { .str = NULL }, 0, 0, E },
