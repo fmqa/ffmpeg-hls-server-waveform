@@ -1,4 +1,4 @@
-From 0da7109ad9356e83ff57a908a6166474479b839a Mon Sep 17 00:00:00 2001
+From d7c164596ad3717cc68c9a8646695a5b40f3a607 Mon Sep 17 00:00:00 2001
 From: "F. Moukayed" <7354509+fmqa@users.noreply.github.com>
 Date: Sat, 29 May 2021 12:52:03 +0000
 Subject: [PATCH] Add support for server-generated waveform data through a
@@ -24,7 +24,7 @@ index 81a5c2b452..b2c8985140 100644
              av_log(os->ctx, AV_LOG_WARNING, "ff_hls_write_file_entry get error\n");
          }
 diff --git a/libavformat/hlsenc.c b/libavformat/hlsenc.c
-index 7d97ce1789..3d12f76603 100644
+index 7d97ce1789..3f6d8be1a9 100644
 --- a/libavformat/hlsenc.c
 +++ b/libavformat/hlsenc.c
 @@ -44,6 +44,8 @@
@@ -77,11 +77,10 @@ index 7d97ce1789..3d12f76603 100644
  } HLSContext;
  
  static int strftime_expand(const char *fmt, char **dest)
-@@ -683,6 +705,22 @@ static int hls_delete_old_segments(AVFormatContext *s, HLSContext *hls,
-             if (ret = hls_delete_file(hls, vs->vtt_avf, path.str, proto))
-                 goto fail;
-         }
-+
+@@ -651,6 +673,21 @@ static int hls_delete_old_segments(AVFormatContext *s, HLSContext *hls,
+     }
+ 
+     while (segment) {
 +        if (segment->peakfd >= 0) {
 +            if (close(segment->peakfd) == 0) {
 +                segment->peakfd = -1;
@@ -96,6 +95,14 @@ index 7d97ce1789..3d12f76603 100644
 +                av_log(hls, AV_LOG_WARNING, "error closing segment peak file: %s\n", segment->peakfilename);
 +            }
 +        }
++
+         av_log(hls, AV_LOG_DEBUG, "deleting old segment %s\n",
+                segment->filename);
+         if (!hls->use_localtime_mkdir) // segment->filename contains basename only
+@@ -683,6 +720,7 @@ static int hls_delete_old_segments(AVFormatContext *s, HLSContext *hls,
+             if (ret = hls_delete_file(hls, vs->vtt_avf, path.str, proto))
+                 goto fail;
+         }
 +
          av_bprint_clear(&path);
          previous_segment = segment;
