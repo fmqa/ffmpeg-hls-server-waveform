@@ -1,4 +1,4 @@
-From 68a831a3ee9fc9798936b2110193da54d872fea1 Mon Sep 17 00:00:00 2001
+From 3470b9d653fb22023c03b3e536d6cee5f7811c90 Mon Sep 17 00:00:00 2001
 From: "F. Moukayed" <7354509+fmqa@users.noreply.github.com>
 Date: Sat, 29 May 2021 12:52:03 +0000
 Subject: [PATCH] Add support for server-generated waveform data through a
@@ -24,7 +24,7 @@ index 81a5c2b452..b2c8985140 100644
              av_log(os->ctx, AV_LOG_WARNING, "ff_hls_write_file_entry get error\n");
          }
 diff --git a/libavformat/hlsenc.c b/libavformat/hlsenc.c
-index 7d97ce1789..0fa325b3cc 100644
+index 7d97ce1789..5bf0ffd4d8 100644
 --- a/libavformat/hlsenc.c
 +++ b/libavformat/hlsenc.c
 @@ -44,6 +44,8 @@
@@ -86,14 +86,14 @@ index 7d97ce1789..0fa325b3cc 100644
 +            if (close(segment->peakfd) == 0) {
 +                segment->peakfd = -1;
 +            } else {
-+                av_log(hls, AV_LOG_DEBUG, "error closing segment peak buffer fd: %d\n", segment->peakfd);
++                av_log(hls, AV_LOG_WARNING, "error closing segment peak buffer fd: %d\n", segment->peakfd);
 +            }
 +        }
 +        if (segment->peakfilename) {
 +            if (unlink(segment->peakfilename) == 0) {
 +                segment->peakfilename = NULL;
 +            } else {
-+                av_log(hls, AV_LOG_DEBUG, "error closing segment peak file: %s\n", segment->peakfilename);
++                av_log(hls, AV_LOG_WARNING, "error closing segment peak file: %s\n", segment->peakfilename);
 +            }
 +        }
 +
@@ -200,14 +200,14 @@ index 7d97ce1789..0fa325b3cc 100644
 +            if (close(en->peakfd) == 0) {
 +                en->peakfd = -1;
 +            } else {
-+                av_log(NULL, AV_LOG_DEBUG, "error closing segment peak buffer fd: %d\n", en->peakfd);
++                av_log(NULL, AV_LOG_WARNING, "error closing segment peak buffer fd: %d\n", en->peakfd);
 +            }
 +        }
 +        if (en->peakfilename) {
 +            if (unlink(en->peakfilename) == 0) {
 +                en->peakfilename = NULL;
 +            } else {
-+                av_log(NULL, AV_LOG_DEBUG, "error closing segment peak filename: %s\n", en->peakfilename);
++                av_log(NULL, AV_LOG_WARNING, "error closing segment peak file: %s\n", en->peakfilename);
 +            }
 +        }
          p = p->next;
