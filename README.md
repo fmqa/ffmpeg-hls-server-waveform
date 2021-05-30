@@ -33,7 +33,7 @@ The following options are added to the HLS muxer:
 
 ## How does it look like?
 
-Like this. Each segment gets an `EXT-X-PEAKDATA` containing a CSV row of data points that may be used for visualisation purposes. The unit of measurement of dBFS.
+Like this. Each segment gets an `EXT-X-PEAKDATA` containing a CSV row of data points that may be used for visualisation purposes. The unit of measurement is dBFS.
 
 ```
 #EXTM3U
