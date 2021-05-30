@@ -174,7 +174,7 @@ For verification/demo purposes, we convert the peak output from the VOD example 
 grep '^#EXT-X-PEAKDATA:' /tmp/stream.m3u8 | cut -d: -f2 | tr '\n' ',' | paste -s | tr ',' '\n' > /tmp/test.csv
 ```
 
-![VOD pxample plot](plot-vod.png)
+![VOD pxample plot](plot-vod-dbfs.png)
 
 # Disclaimer
 
