@@ -1,19 +1,29 @@
-From 0f3b151bbbea339c01d071b62ca112922004007e Mon Sep 17 00:00:00 2001
+From 9162db1a42a6c910faca53f6a5c3ca4c4052f81d Mon Sep 17 00:00:00 2001
 From: "F. Moukayed" <7354509+fmqa@users.noreply.github.com>
 Date: Sat, 29 May 2021 12:52:03 +0000
 Subject: [PATCH] Add support for server-generated waveform data through a
  custom EXT-X-PEAKDATA extension
 
 ---
- libavformat/dashenc.c     |   2 +-
- libavformat/hlsenc.c      | 284 +++++++++++++++++++++++++++++++++++++-
- libavformat/hlsplaylist.c |  48 ++++++-
- 3 files changed, 329 insertions(+), 5 deletions(-)
+ libavformat/dashenc.c     |   4 +-
+ libavformat/hlsenc.c      | 290 +++++++++++++++++++++++++++++++++++++-
+ libavformat/hlsplaylist.c |  54 ++++++-
+ libavformat/hlsplaylist.h |   5 +-
+ 4 files changed, 342 insertions(+), 11 deletions(-)
 
 diff --git a/libavformat/dashenc.c b/libavformat/dashenc.c
-index 81a5c2b452..b2c8985140 100644
+index 81a5c2b452..474af1a226 100644
 --- a/libavformat/dashenc.c
 +++ b/libavformat/dashenc.c
+@@ -555,7 +555,7 @@ static void write_hls_media_playlist(OutputStream *os, AVFormatContext *s,
+     }
+ 
+     ff_hls_write_playlist_header(c->m3u8_out, 6, -1, target_duration,
+-                                 start_number, PLAYLIST_TYPE_NONE, 0);
++                                 start_number, PLAYLIST_TYPE_NONE, 0, -1.0);
+ 
+     ff_hls_write_init_file(c->m3u8_out, os->initfile, c->single_file,
+                            os->init_range_length, os->init_start_pos);
 @@ -575,7 +575,7 @@ static void write_hls_media_playlist(OutputStream *os, AVFormatContext *s,
                                  (double) seg->duration / timescale, 0,
                                  seg->range_length, seg->start_pos, NULL,
@@ -24,7 +34,7 @@ index 81a5c2b452..b2c8985140 100644
              av_log(os->ctx, AV_LOG_WARNING, "ff_hls_write_file_entry get error\n");
          }
 diff --git a/libavformat/hlsenc.c b/libavformat/hlsenc.c
-index 7d97ce1789..859d0b6f47 100644
+index 7d97ce1789..f53b41b925 100644
 --- a/libavformat/hlsenc.c
 +++ b/libavformat/hlsenc.c
 @@ -44,6 +44,8 @@
@@ -172,7 +182,7 @@ index 7d97ce1789..859d0b6f47 100644
 +            if (rmsidx >= BUFSIZ) {
 +                ret = write(en->peakfd, rmsbuf, rmsidx * sizeof(double));
 +                if (ret != rmsidx * sizeof(double)) {
-+                    av_log(hls, AV_LOG_WARNING, "Could not write %d RMS peaks to file: %s", rmsidx, en->peakfilename ? en->peakfilename : "(unnamed)");
++                    av_log(hls, AV_LOG_WARNING, "Could not write %d peaks to file: %s", rmsidx, en->peakfilename ? en->peakfilename : "(unnamed)");
 +                }
 +                rmsidx = 0;
 +            }
@@ -180,7 +190,7 @@ index 7d97ce1789..859d0b6f47 100644
 +        if (rmsidx > 0) {
 +            ret = write(en->peakfd, rmsbuf, rmsidx * sizeof(double));
 +            if (ret != rmsidx * sizeof(double)) {
-+                av_log(hls, AV_LOG_WARNING, "Could not write %d RMS peaks to file: %s", rmsidx, en->peakfilename ? en->peakfilename : "(unnamed)");
++                av_log(hls, AV_LOG_WARNING, "Could not write %d peaks to file: %s", rmsidx, en->peakfilename ? en->peakfilename : "(unnamed)");
 +            }
 +        }
 +        if (ret < 0) {
@@ -251,25 +261,41 @@ index 7d97ce1789..859d0b6f47 100644
          p = p->next;
          av_freep(&en);
      }
-@@ -1624,7 +1770,7 @@ static int hls_window(AVFormatContext *s, int last, VariantStream *vs)
+@@ -1594,7 +1740,8 @@ static int hls_window(AVFormatContext *s, int last, VariantStream *vs)
+ 
+     vs->discontinuity_set = 0;
+     ff_hls_write_playlist_header(byterange_mode ? hls->m3u8_out : vs->out, hls->version, hls->allowcache,
+-                                 target_duration, sequence, hls->pl_type, hls->flags & HLS_I_FRAMES_ONLY);
++                                 target_duration, sequence, hls->pl_type, hls->flags & HLS_I_FRAMES_ONLY,
++                                 hls->audio_peaks ? hls->apio_winsize / (double)hls->apio_sr : -1.0);
+ 
+     if ((hls->flags & HLS_DISCONT_START) && sequence==hls->start_sequence && vs->discontinuity_set==0) {
+         avio_printf(byterange_mode ? hls->m3u8_out : vs->out, "#EXT-X-DISCONTINUITY\n");
+@@ -1624,7 +1771,7 @@ static int hls_window(AVFormatContext *s, int last, VariantStream *vs)
                                        en->size, en->pos, hls->baseurl,
                                        en->filename,
                                        en->discont_program_date_time ? &en->discont_program_date_time : prog_date_time_p,
 -                                      en->keyframe_size, en->keyframe_pos, hls->flags & HLS_I_FRAMES_ONLY);
-+                                      en->keyframe_size, en->keyframe_pos, hls->flags & HLS_I_FRAMES_ONLY, &en->peakfd, &en->peakfilename);
++                                      en->keyframe_size, en->keyframe_pos, hls->flags & HLS_I_FRAMES_ONLY, &en->peakfd, en->peakfilename);
          if (en->discont_program_date_time)
              en->discont_program_date_time -= en->duration;
          if (ret < 0) {
-@@ -1647,7 +1793,7 @@ static int hls_window(AVFormatContext *s, int last, VariantStream *vs)
+@@ -1643,11 +1790,12 @@ static int hls_window(AVFormatContext *s, int last, VariantStream *vs)
+             goto fail;
+         }
+         ff_hls_write_playlist_header(hls->sub_m3u8_out, hls->version, hls->allowcache,
+-                                     target_duration, sequence, PLAYLIST_TYPE_NONE, 0);
++                                     target_duration, sequence, PLAYLIST_TYPE_NONE, 0,
++                                     hls->audio_peaks ? hls->apio_winsize / (double)hls->apio_sr : -1.0);
          for (en = vs->segments; en; en = en->next) {
              ret = ff_hls_write_file_entry(hls->sub_m3u8_out, 0, byterange_mode,
                                            en->duration, 0, en->size, en->pos,
 -                                          hls->baseurl, en->sub_filename, NULL, 0, 0, 0);
-+                                          hls->baseurl, en->sub_filename, NULL, 0, 0, 0, &en->peakfd, &en->peakfilename);
++                                          hls->baseurl, en->sub_filename, NULL, 0, 0, 0, &en->peakfd, en->peakfilename);
              if (ret < 0) {
                  av_log(s, AV_LOG_WARNING, "ff_hls_write_file_entry get error\n");
              }
-@@ -2673,6 +2819,47 @@ static int hls_write_packet(AVFormatContext *s, AVPacket *pkt)
+@@ -2673,6 +2821,47 @@ static int hls_write_packet(AVFormatContext *s, AVPacket *pkt)
      vs->packets_written++;
      if (oc->pb) {
          int64_t keyframe_pre_pos = avio_tell(oc->pb);
@@ -317,7 +343,7 @@ index 7d97ce1789..859d0b6f47 100644
          ret = ff_write_chained(oc, stream_index, pkt, s, 0);
          if ((st->codecpar->codec_type == AVMEDIA_TYPE_VIDEO) &&
              (pkt->flags & AV_PKT_FLAG_KEY) && !keyframe_pre_pos) {
-@@ -2712,6 +2899,37 @@ static void hls_deinit(AVFormatContext *s)
+@@ -2712,6 +2901,37 @@ static void hls_deinit(AVFormatContext *s)
          av_freep(&vs->streams);
      }
  
@@ -355,7 +381,7 @@ index 7d97ce1789..859d0b6f47 100644
      ff_format_io_close(s, &hls->m3u8_out);
      ff_format_io_close(s, &hls->sub_m3u8_out);
      av_freep(&hls->key_basename);
-@@ -2925,6 +3143,63 @@ static int hls_init(AVFormatContext *s)
+@@ -2925,6 +3145,63 @@ static int hls_init(AVFormatContext *s)
          }
      }
  
@@ -419,18 +445,18 @@ index 7d97ce1789..859d0b6f47 100644
      if ((hls->start_sequence_source_type == HLS_START_SEQUENCE_AS_SECONDS_SINCE_EPOCH) ||
          (hls->start_sequence_source_type == HLS_START_SEQUENCE_AS_MICROSECONDS_SINCE_EPOCH) ||
          (hls->start_sequence_source_type == HLS_START_SEQUENCE_AS_FORMATTED_DATETIME)) {
-@@ -3180,6 +3455,9 @@ static const AVOption options[] = {
+@@ -3180,6 +3457,9 @@ static const AVOption options[] = {
      {"timeout", "set timeout for socket I/O operations", OFFSET(timeout), AV_OPT_TYPE_DURATION, { .i64 = -1 }, -1, INT_MAX, .flags = E },
      {"ignore_io_errors", "Ignore IO errors for stable long-duration runs with network output", OFFSET(ignore_io_errors), AV_OPT_TYPE_BOOL, { .i64 = 0 }, 0, 1, E },
      {"headers", "set custom HTTP headers, can override built in default headers", OFFSET(headers), AV_OPT_TYPE_STRING, { .str = NULL }, 0, 0, E },
-+    {"hls_audio_peaks", "Add per-segment EXT-X-PEAKDATA time series data to playlist", OFFSET(audio_peaks), AV_OPT_TYPE_BOOL, {.i64 = 0 }, 0, 1, E },
-+    {"hls_audio_peaks_window", "EXT-X-PEAKDATA window size",  OFFSET(apio_winsize),    AV_OPT_TYPE_INT,    {.i64 = 1000},               1,       INT_MAX,   E},
-+    {"hls_audio_peaks_rate", "Sampling rate for waveform calculation",  OFFSET(apio_sr),    AV_OPT_TYPE_INT,    {.i64 = 8000},               1,       INT_MAX,   E},
++    {"hls_audio_peaks", "Add per-segment EXT-X-LOUDNESS time series data to playlist", OFFSET(audio_peaks), AV_OPT_TYPE_BOOL, {.i64 = 0 }, 0, 1, E },
++    {"hls_audio_peaks_window", "EXT-X-LOUDNESS window size",  OFFSET(apio_winsize),    AV_OPT_TYPE_INT,    {.i64 = 1000},               1,       INT_MAX,   E},
++    {"hls_audio_peaks_rate", "Sampling rate for loudness calculation",  OFFSET(apio_sr),    AV_OPT_TYPE_INT,    {.i64 = 8000},               1,       INT_MAX,   E},
      { NULL },
  };
  
 diff --git a/libavformat/hlsplaylist.c b/libavformat/hlsplaylist.c
-index 0e1dcc087f..3601891361 100644
+index 0e1dcc087f..162b228e40 100644
 --- a/libavformat/hlsplaylist.c
 +++ b/libavformat/hlsplaylist.c
 @@ -28,6 +28,17 @@
@@ -451,27 +477,47 @@ index 0e1dcc087f..3601891361 100644
  void ff_hls_write_playlist_version(AVIOContext *out, int version)
  {
      if (!out)
-@@ -136,7 +147,7 @@ int ff_hls_write_file_entry(AVIOContext *out, int insert_discont,
+@@ -97,7 +108,8 @@ void ff_hls_write_stream_info(AVStream *st, AVIOContext *out, int bandwidth,
+ 
+ void ff_hls_write_playlist_header(AVIOContext *out, int version, int allowcache,
+                                   int target_duration, int64_t sequence,
+-                                  uint32_t playlist_type, int iframe_mode)
++                                  uint32_t playlist_type, int iframe_mode,
++                                  double samples_per_peak)
+ {
+     if (!out)
+         return;
+@@ -117,6 +129,9 @@ void ff_hls_write_playlist_header(AVIOContext *out, int version, int allowcache,
+     if (iframe_mode) {
+         avio_printf(out, "#EXT-X-I-FRAMES-ONLY\n");
+     }
++    if (samples_per_peak > 0) {
++        avio_printf(out, "#EXT-X-LOUDNESS-INF:UNIT=dBFS,SPP=%.4lf\n", samples_per_peak);
++    }
+ }
+ 
+ void ff_hls_write_init_file(AVIOContext *out, const char *filename,
+@@ -136,7 +151,7 @@ int ff_hls_write_file_entry(AVIOContext *out, int insert_discont,
                              const char *baseurl /* Ignored if NULL */,
                              const char *filename, double *prog_date_time,
                              int64_t video_keyframe_size, int64_t video_keyframe_pos,
 -                            int iframe_mode)
-+                            int iframe_mode, int *peakfd, char **peakfilename)
++                            int iframe_mode, int *peakfd, const char *peakfilename)
  {
      if (!out || !filename)
          return AVERROR(EINVAL);
-@@ -179,6 +190,41 @@ int ff_hls_write_file_entry(AVIOContext *out, int insert_discont,
+@@ -179,6 +194,41 @@ int ff_hls_write_file_entry(AVIOContext *out, int insert_discont,
          avio_printf(out, "#EXT-X-PROGRAM-DATE-TIME:%s.%03d%s\n", buf0, milli, buf1);
          *prog_date_time += duration;
      }
 +
-+    if (peakfilename && *peakfilename && peakfd) {
++    if (peakfilename && peakfd) {
 +        int ret;
 +        double buffer[BUFSIZ];
 +        int header = 0;
 +
 +        if (*peakfd < 0) {
-+            *peakfd = avpriv_open(*peakfilename, O_RDONLY);
++            *peakfd = avpriv_open(peakfilename, O_RDONLY);
 +            if (*peakfd < 0) {
 +                av_log(NULL, AV_LOG_WARNING, "open() error in ff_hls_write_file_entry\n");
 +                goto post_apio;
@@ -480,7 +526,7 @@ index 0e1dcc087f..3601891361 100644
 +
 +        while ((ret = read(*peakfd, buffer, sizeof(buffer))) > 0) {
 +            if (!header) {
-+                avio_printf(out, "#EXT-X-PEAKDATA:");
++                avio_printf(out, "#EXT-X-LOUDNESS:");
 +                header = 1;
 +            }
 +            for (int i = 0, n = ret / sizeof(double); i < n; ++i) {
@@ -502,6 +548,29 @@ index 0e1dcc087f..3601891361 100644
      if (baseurl)
          avio_printf(out, "%s", baseurl);
      avio_printf(out, "%s\n", filename);
+diff --git a/libavformat/hlsplaylist.h b/libavformat/hlsplaylist.h
+index 29487da3ed..417b5fe2d8 100644
+--- a/libavformat/hlsplaylist.h
++++ b/libavformat/hlsplaylist.h
+@@ -49,7 +49,8 @@ void ff_hls_write_stream_info(AVStream *st, AVIOContext *out, int bandwidth,
+                               const char *sgroup);
+ void ff_hls_write_playlist_header(AVIOContext *out, int version, int allowcache,
+                                   int target_duration, int64_t sequence,
+-                                  uint32_t playlist_type, int iframe_mode);
++                                  uint32_t playlist_type, int iframe_mode,
++                                  double samples_per_peak);
+ void ff_hls_write_init_file(AVIOContext *out, const char *filename,
+                             int byterange_mode, int64_t size, int64_t pos);
+ int ff_hls_write_file_entry(AVIOContext *out, int insert_discont,
+@@ -59,7 +60,7 @@ int ff_hls_write_file_entry(AVIOContext *out, int insert_discont,
+                             const char *baseurl /* Ignored if NULL */,
+                             const char *filename, double *prog_date_time,
+                             int64_t video_keyframe_size, int64_t video_keyframe_pos,
+-                            int iframe_mode);
++                            int iframe_mode, int *peakfd, const char *peakfilename);
+ void ff_hls_write_end_list (AVIOContext *out);
+ 
+ #endif /* AVFORMAT_HLSPLAYLIST_H_ */
 -- 
 2.25.1
 
