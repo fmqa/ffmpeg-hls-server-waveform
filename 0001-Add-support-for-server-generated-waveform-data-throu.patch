@@ -1,4 +1,4 @@
-From 9162db1a42a6c910faca53f6a5c3ca4c4052f81d Mon Sep 17 00:00:00 2001
+From 9b5942e88149de03b1e2963f3f46c822e3a4af15 Mon Sep 17 00:00:00 2001
 From: "F. Moukayed" <7354509+fmqa@users.noreply.github.com>
 Date: Sat, 29 May 2021 12:52:03 +0000
 Subject: [PATCH] Add support for server-generated waveform data through a
@@ -456,7 +456,7 @@ index 7d97ce1789..f53b41b925 100644
  };
  
 diff --git a/libavformat/hlsplaylist.c b/libavformat/hlsplaylist.c
-index 0e1dcc087f..162b228e40 100644
+index 0e1dcc087f..e9245b7c6c 100644
 --- a/libavformat/hlsplaylist.c
 +++ b/libavformat/hlsplaylist.c
 @@ -28,6 +28,17 @@
@@ -483,7 +483,7 @@ index 0e1dcc087f..162b228e40 100644
                                    int target_duration, int64_t sequence,
 -                                  uint32_t playlist_type, int iframe_mode)
 +                                  uint32_t playlist_type, int iframe_mode,
-+                                  double samples_per_peak)
++                                  double spp)
  {
      if (!out)
          return;
@@ -491,8 +491,8 @@ index 0e1dcc087f..162b228e40 100644
      if (iframe_mode) {
          avio_printf(out, "#EXT-X-I-FRAMES-ONLY\n");
      }
-+    if (samples_per_peak > 0) {
-+        avio_printf(out, "#EXT-X-LOUDNESS-INF:UNIT=dBFS,SPP=%.4lf\n", samples_per_peak);
++    if (spp > 0) {
++        avio_printf(out, "#EXT-X-LOUDNESS-INF:UNIT=dBFS,SPP=%.4lf\n", spp);
 +    }
  }
  
@@ -549,7 +549,7 @@ index 0e1dcc087f..162b228e40 100644
          avio_printf(out, "%s", baseurl);
      avio_printf(out, "%s\n", filename);
 diff --git a/libavformat/hlsplaylist.h b/libavformat/hlsplaylist.h
-index 29487da3ed..417b5fe2d8 100644
+index 29487da3ed..62c10a232e 100644
 --- a/libavformat/hlsplaylist.h
 +++ b/libavformat/hlsplaylist.h
 @@ -49,7 +49,8 @@ void ff_hls_write_stream_info(AVStream *st, AVIOContext *out, int bandwidth,
@@ -558,7 +558,7 @@ index 29487da3ed..417b5fe2d8 100644
                                    int target_duration, int64_t sequence,
 -                                  uint32_t playlist_type, int iframe_mode);
 +                                  uint32_t playlist_type, int iframe_mode,
-+                                  double samples_per_peak);
++                                  double spp);
  void ff_hls_write_init_file(AVIOContext *out, const char *filename,
                              int byterange_mode, int64_t size, int64_t pos);
  int ff_hls_write_file_entry(AVIOContext *out, int insert_discont,
