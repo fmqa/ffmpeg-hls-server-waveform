@@ -175,7 +175,7 @@ For verification/demo purposes, we convert the peak output from the VOD example 
 sed -n 's/^#EXT-X-LOUDNESS:.*,PEAKS=\(.*\)$/\1/p' /tmp/stream.m3u8 | paste -sd, | tr ',' '\n' | LANG=C awk '!/^\s*$/ { print($1) }' >/tmp/test.csv
 ```
 
-![VOD pxample plot](plot-vod-dbfs.png)
+![VOD pxample plot](plot-vod-dBFS.png)
 
 # Disclaimer
 
