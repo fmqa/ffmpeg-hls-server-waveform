@@ -172,7 +172,7 @@ stream7.ts
 For verification/demo purposes, we convert the peak output from the VOD example into a single-column, plottable CSV:
 
 ```
-sed -n 's/^#EXT-X-LOUDNESS:.*,PEAKS=\(.*\)$/\1/p' /tmp/stream.m3u8 | paste -sd, | tr ',' '\n' | LANG=C awk '!/^\s*$/ { print($1) }' >/tmp/test.csv
+sed -n 's/^#EXT-X-LOUDNESS:.*,PEAKS=\(.*\)$/\1/p' /tmp/stream.m3u8 | paste -sd, | tr ',' '\n' >/tmp/test.csv
 ```
 
 ![VOD pxample plot](plot-vod-dBFS.png)
