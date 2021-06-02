@@ -1,4 +1,4 @@
-From 2075ac4b4dfcff13716a5737b792c2f7392e5252 Mon Sep 17 00:00:00 2001
+From 175ea205e22f9eab5043ad23d0df91cd8bd8812b Mon Sep 17 00:00:00 2001
 From: "F. Moukayed" <7354509+fmqa@users.noreply.github.com>
 Date: Sat, 29 May 2021 12:52:03 +0000
 Subject: [PATCH] Add support for server-generated waveform data through a
@@ -6,10 +6,10 @@ Subject: [PATCH] Add support for server-generated waveform data through a
 
 ---
  libavformat/dashenc.c     |   2 +-
- libavformat/hlsenc.c      | 288 +++++++++++++++++++++++++++++++++++++-
- libavformat/hlsplaylist.c |  49 ++++++-
+ libavformat/hlsenc.c      | 319 +++++++++++++++++++++++++++++++++++++-
+ libavformat/hlsplaylist.c |  49 +++++-
  libavformat/hlsplaylist.h |   3 +-
- 4 files changed, 336 insertions(+), 6 deletions(-)
+ 4 files changed, 367 insertions(+), 6 deletions(-)
 
 diff --git a/libavformat/dashenc.c b/libavformat/dashenc.c
 index 81a5c2b452..ba7b74f5b0 100644
@@ -25,7 +25,7 @@ index 81a5c2b452..ba7b74f5b0 100644
              av_log(os->ctx, AV_LOG_WARNING, "ff_hls_write_file_entry get error\n");
          }
 diff --git a/libavformat/hlsenc.c b/libavformat/hlsenc.c
-index 7d97ce1789..ffd53d200b 100644
+index 7d97ce1789..7e3c192fda 100644
 --- a/libavformat/hlsenc.c
 +++ b/libavformat/hlsenc.c
 @@ -44,6 +44,8 @@
@@ -108,7 +108,7 @@ index 7d97ce1789..ffd53d200b 100644
          av_bprint_clear(&path);
          previous_segment = segment;
          segment = previous_segment->next;
-@@ -1105,11 +1143,34 @@ static int sls_flag_use_localtime_filename(AVFormatContext *oc, HLSContext *c, V
+@@ -1105,11 +1143,92 @@ static int sls_flag_use_localtime_filename(AVFormatContext *oc, HLSContext *c, V
      return 0;
  }
  
@@ -134,6 +134,64 @@ index 7d97ce1789..ffd53d200b 100644
 +    return sigma;
 +}
 +
++static void hls_write_segment_peaks(struct AVFormatContext *s, HLSContext *hls, HLSAudioPeakIO *apio, HLSSegment *en)
++{
++    double rmsbuf[BUFSIZ];
++    size_t rmsidx = 0;
++    ssize_t ret = 0;
++    en->peakfd = avpriv_tempfile("ffhlspeak-seg-", &en->peakfilename, 0, s);
++    if (en->peakfd < 0) {
++        av_log(hls, AV_LOG_WARNING, "Could not open segment peak file: %s\n", en->peakfilename ? en->peakfilename : "(unnamed)");
++        return;
++    }
++    if (lseek(apio->fd, 0, SEEK_SET) < 0) {
++        av_log(hls, AV_LOG_WARNING, "Could not rewind peak buffer file: %s\n", apio->filename ? apio->filename : "(unnamed)");
++        if (close(en->peakfd) == 0) {
++            en->peakfd = -1;
++        } else {
++            av_log(hls, AV_LOG_WARNING, "Could not close segment peak file: %s\n", en->peakfilename ? en->peakfilename : "(unnamed)");
++        }
++        if (unlink(en->peakfilename) == 0) {
++            en->peakfilename = NULL;
++        } else {
++            av_log(hls, AV_LOG_WARNING, "error closing segment peak file: %s\n", en->peakfilename);
++        }
++        return;
++    }
++    while ((ret = read(apio->fd, apio->window, sizeof(int16_t) * hls->apio_winsize)) > 0) {
++        size_t n = ret / sizeof(int16_t);
++        /* Compute window dBFS */
++        rmsbuf[rmsidx++] = 20 * log10(sqrt(ssqri16(n, apio->window) / n)) + 3.0103;
++        if (rmsidx >= BUFSIZ) {
++            ret = write(en->peakfd, rmsbuf, rmsidx * sizeof(double));
++            if (ret != rmsidx * sizeof(double)) {
++                av_log(hls, AV_LOG_WARNING, "Could not write %ld peaks to file: %s", rmsidx, en->peakfilename ? en->peakfilename : "(unnamed)");
++            }
++            rmsidx = 0;
++        }
++    }
++    if (rmsidx > 0) {
++        ret = write(en->peakfd, rmsbuf, rmsidx * sizeof(double));
++        if (ret != rmsidx * sizeof(double)) {
++            av_log(hls, AV_LOG_WARNING, "Could not write %ld peaks to file: %s", rmsidx, en->peakfilename ? en->peakfilename : "(unnamed)");
++        }
++    }
++    if (ret < 0) {
++        av_log(hls, AV_LOG_WARNING, "Could not read peak buffer file: %s\n", apio->filename ? apio->filename : "(unnamed)");
++    }
++    if (lseek(apio->fd, 0, SEEK_SET) < 0) {
++        av_log(hls, AV_LOG_WARNING, "Could not rewind peak buffer file: %s\n", apio->filename ? apio->filename : "(unnamed)");
++    }
++    if (truncate(apio->filename, 0) < 0) {
++        av_log(hls, AV_LOG_WARNING, "Could not truncate peak buffer file: %s\n", apio->filename ? apio->filename : "(unnamed)");
++    }
++    if (close(en->peakfd) == 0) {
++        en->peakfd = -1;
++    } else {
++        av_log(hls, AV_LOG_WARNING, "Could not close segment peak file: %s\n", en->peakfilename ? en->peakfilename : "(unnamed)");
++    }
++}
++
  /* Create a new segment and append it to the segment list */
  static int hls_append_segment(struct AVFormatContext *s, HLSContext *hls,
                                VariantStream *vs, double duration, int64_t pos,
@@ -143,7 +201,7 @@ index 7d97ce1789..ffd53d200b 100644
      HLSSegment *en = av_malloc(sizeof(*en));
      const char  *filename;
      int byterange_mode = (hls->flags & HLS_SINGLE_FILE) || (hls->max_seg_size > 0);
-@@ -1149,6 +1210,62 @@ static int hls_append_segment(struct AVFormatContext *s, HLSContext *hls,
+@@ -1149,6 +1268,12 @@ static int hls_append_segment(struct AVFormatContext *s, HLSContext *hls,
      en->next     = NULL;
      en->discont  = 0;
      en->discont_program_date_time = 0;
@@ -151,62 +209,12 @@ index 7d97ce1789..ffd53d200b 100644
 +    en->peakfd = -1;
 +
 +    if (apio) {
-+        double rmsbuf[BUFSIZ];
-+        int rmsidx = 0;
-+        en->peakfd = avpriv_tempfile("ffhlspeak-seg-", &en->peakfilename, 0, s);
-+        if (en->peakfd < 0) {
-+            av_log(hls, AV_LOG_WARNING, "Could not open segment peak file: %s\n", en->peakfilename ? en->peakfilename : "(unnamed)");
-+            goto apioend;
-+        }
-+        ret = lseek(apio->fd, 0, SEEK_SET);
-+        if (ret < 0) {
-+            av_log(hls, AV_LOG_WARNING, "Could not rewind peak buffer file: %s\n", apio->filename ? apio->filename : "(unnamed)");
-+            close(en->peakfd);
-+            en->peakfd = -1;
-+            en->peakfilename = NULL;
-+            goto apioend;
-+        }
-+        while ((ret = read(apio->fd, apio->window, sizeof(int16_t) * hls->apio_winsize)) > 0) {
-+            size_t n = ret / sizeof(int16_t);
-+            /* Compute window dBFS */
-+            rmsbuf[rmsidx++] = 20 * log10(sqrt(ssqri16(n, apio->window) / n)) + 3.0103;
-+            if (rmsidx >= BUFSIZ) {
-+                ret = write(en->peakfd, rmsbuf, rmsidx * sizeof(double));
-+                if (ret != rmsidx * sizeof(double)) {
-+                    av_log(hls, AV_LOG_WARNING, "Could not write %d peaks to file: %s", rmsidx, en->peakfilename ? en->peakfilename : "(unnamed)");
-+                }
-+                rmsidx = 0;
-+            }
-+        }
-+        if (rmsidx > 0) {
-+            ret = write(en->peakfd, rmsbuf, rmsidx * sizeof(double));
-+            if (ret != rmsidx * sizeof(double)) {
-+                av_log(hls, AV_LOG_WARNING, "Could not write %d peaks to file: %s", rmsidx, en->peakfilename ? en->peakfilename : "(unnamed)");
-+            }
-+        }
-+        if (ret < 0) {
-+            av_log(hls, AV_LOG_WARNING, "Could not read peak buffer file: %s\n", apio->filename ? apio->filename : "(unnamed)");
-+        }
-+        ret = lseek(apio->fd, 0, SEEK_SET);
-+        if (ret < 0) {
-+            av_log(hls, AV_LOG_WARNING, "Could not rewind peak buffer file: %s\n", apio->filename ? apio->filename : "(unnamed)");
-+        }
-+        ret = truncate(apio->filename, 0);
-+        if (ret < 0) {
-+            av_log(hls, AV_LOG_WARNING, "Could not truncate peak buffer file: %s\n", apio->filename ? apio->filename : "(unnamed)");
-+        }
-+        ret = close(en->peakfd);
-+        if (ret == 0) {
-+            en->peakfd = -1;
-+        } else {
-+            av_log(hls, AV_LOG_WARNING, "Could not close segment peak file: %s\n", en->peakfilename ? en->peakfilename : "(unnamed)");
-+        }
++        hls_write_segment_peaks(s, hls, apio, en);
 +    }
-+apioend:
  
      if (vs->discontinuity) {
          en->discont = 1;
-@@ -1186,8 +1303,23 @@ static int hls_append_segment(struct AVFormatContext *s, HLSContext *hls,
+@@ -1186,8 +1311,23 @@ static int hls_append_segment(struct AVFormatContext *s, HLSContext *hls,
              vs->old_segments = en;
              if ((ret = hls_delete_old_segments(s, hls, vs)) < 0)
                  return ret;
@@ -231,7 +239,7 @@ index 7d97ce1789..ffd53d200b 100644
      } else
          vs->nb_entries++;
  
-@@ -1316,6 +1448,20 @@ static void hls_free_segments(HLSSegment *p)
+@@ -1316,6 +1456,20 @@ static void hls_free_segments(HLSSegment *p)
  
      while (p) {
          en = p;
@@ -252,7 +260,7 @@ index 7d97ce1789..ffd53d200b 100644
          p = p->next;
          av_freep(&en);
      }
-@@ -1624,7 +1770,9 @@ static int hls_window(AVFormatContext *s, int last, VariantStream *vs)
+@@ -1624,7 +1778,9 @@ static int hls_window(AVFormatContext *s, int last, VariantStream *vs)
                                        en->size, en->pos, hls->baseurl,
                                        en->filename,
                                        en->discont_program_date_time ? &en->discont_program_date_time : prog_date_time_p,
@@ -263,7 +271,7 @@ index 7d97ce1789..ffd53d200b 100644
          if (en->discont_program_date_time)
              en->discont_program_date_time -= en->duration;
          if (ret < 0) {
-@@ -1647,7 +1795,9 @@ static int hls_window(AVFormatContext *s, int last, VariantStream *vs)
+@@ -1647,7 +1803,9 @@ static int hls_window(AVFormatContext *s, int last, VariantStream *vs)
          for (en = vs->segments; en; en = en->next) {
              ret = ff_hls_write_file_entry(hls->sub_m3u8_out, 0, byterange_mode,
                                            en->duration, 0, en->size, en->pos,
@@ -274,7 +282,7 @@ index 7d97ce1789..ffd53d200b 100644
              if (ret < 0) {
                  av_log(s, AV_LOG_WARNING, "ff_hls_write_file_entry get error\n");
              }
-@@ -2673,6 +2823,47 @@ static int hls_write_packet(AVFormatContext *s, AVPacket *pkt)
+@@ -2673,6 +2831,47 @@ static int hls_write_packet(AVFormatContext *s, AVPacket *pkt)
      vs->packets_written++;
      if (oc->pb) {
          int64_t keyframe_pre_pos = avio_tell(oc->pb);
@@ -322,7 +330,7 @@ index 7d97ce1789..ffd53d200b 100644
          ret = ff_write_chained(oc, stream_index, pkt, s, 0);
          if ((st->codecpar->codec_type == AVMEDIA_TYPE_VIDEO) &&
              (pkt->flags & AV_PKT_FLAG_KEY) && !keyframe_pre_pos) {
-@@ -2712,6 +2903,37 @@ static void hls_deinit(AVFormatContext *s)
+@@ -2712,6 +2911,35 @@ static void hls_deinit(AVFormatContext *s)
          av_freep(&vs->streams);
      }
  
@@ -330,37 +338,35 @@ index 7d97ce1789..ffd53d200b 100644
 +        for (int i = 0; i < s->nb_streams; ++i) {
 +            if (hls->apio[i].frame) {
 +                av_frame_free(&hls->apio[i].frame);
-+                hls->apio[i].frame = NULL;
 +            }
 +            if (hls->apio[i].ctx) {
-+                avcodec_close(hls->apio[i].ctx);
-+                hls->apio[i].ctx = NULL;
++                avcodec_free_context(&hls->apio[i].ctx);
 +            }
 +            if (hls->apio[i].swr) {
 +                swr_free(&hls->apio[i].swr);
 +                hls->apio[i].swr = NULL;
 +            }
 +            if (hls->apio[i].window) {
-+                av_free(hls->apio[i].window);
-+                hls->apio[i].window = NULL;
++                av_freep(&hls->apio[i].window);
 +            }
 +            if (hls->apio[i].fd >= 0) {
-+                close(hls->apio[i].fd);
-+                hls->apio[i].fd = -1;
++                if (close(hls->apio[i].fd) == 0) {
++                    hls->apio[i].fd = -1;
++                }
 +            }
 +            if (hls->apio[i].filename) {
-+                unlink(hls->apio[i].filename);
-+                hls->apio[i].filename = NULL;
++                if (unlink(hls->apio[i].filename) == 0) {
++                    hls->apio[i].filename = NULL;
++                }
 +            }
 +        }
-+        av_free(hls->apio);
-+        hls->apio = NULL;
++        av_freep(&hls->apio);
 +    }
 +
      ff_format_io_close(s, &hls->m3u8_out);
      ff_format_io_close(s, &hls->sub_m3u8_out);
      av_freep(&hls->key_basename);
-@@ -2925,6 +3147,63 @@ static int hls_init(AVFormatContext *s)
+@@ -2925,6 +3153,88 @@ static int hls_init(AVFormatContext *s)
          }
      }
  
@@ -378,41 +384,66 @@ index 7d97ce1789..ffd53d200b 100644
 +                }
 +                ret = avcodec_parameters_to_context(hls->apio[i].ctx, s->streams[i]->codecpar);
 +                if (ret < 0) {
++                    avcodec_free_context(&hls->apio[i].ctx);
 +                    return ret;
 +                }
 +                hls->apio[i].ac = avcodec_find_decoder(hls->apio[i].ctx->codec_id);
 +                if (!hls->apio[i].ac) {
 +                    av_log(s, AV_LOG_ERROR, "Could not find input codec\n");
++                    avcodec_free_context(&hls->apio[i].ctx);
 +                    return -1;
 +                }
 +                hls->apio[i].swr = swr_alloc();
 +                if (!hls->apio[i].swr) {
++                    avcodec_free_context(&hls->apio[i].ctx);
 +                    return AVERROR(ENOMEM);
 +                }
-+                av_opt_set_int(hls->apio[i].swr, "in_channel_count", s->streams[i]->codecpar->channels, 0);
-+                av_opt_set_int(hls->apio[i].swr, "out_channel_count", 1, 0);
-+                av_opt_set_int(hls->apio[i].swr, "in_channel_layout", s->streams[i]->codecpar->channel_layout, 0);
-+                av_opt_set_int(hls->apio[i].swr, "out_channel_layout", AV_CH_LAYOUT_MONO, 0);
-+                av_opt_set_int(hls->apio[i].swr, "in_sample_rate", s->streams[i]->codecpar->sample_rate, 0);
-+                av_opt_set_int(hls->apio[i].swr, "out_sample_rate", hls->apio_sr, 0);
-+                av_opt_set_sample_fmt(hls->apio[i].swr, "in_sample_fmt", s->streams[i]->codecpar->format, 0);
-+                av_opt_set_sample_fmt(hls->apio[i].swr, "out_sample_fmt", AV_SAMPLE_FMT_S16P, 0);
++                if ((ret = av_opt_set_int(hls->apio[i].swr, "in_channel_count", s->streams[i]->codecpar->channels, 0)) ||
++                    (ret = av_opt_set_int(hls->apio[i].swr, "out_channel_count", 1, 0)) ||
++                    (ret = av_opt_set_int(hls->apio[i].swr, "in_channel_layout", s->streams[i]->codecpar->channel_layout, 0)) ||
++                    (ret = av_opt_set_int(hls->apio[i].swr, "out_channel_layout", AV_CH_LAYOUT_MONO, 0)) ||
++                    (ret = av_opt_set_int(hls->apio[i].swr, "in_sample_rate", s->streams[i]->codecpar->sample_rate, 0)) ||
++                    (ret = av_opt_set_int(hls->apio[i].swr, "out_sample_rate", hls->apio_sr, 0)) ||
++                    (ret = av_opt_set_sample_fmt(hls->apio[i].swr, "in_sample_fmt", s->streams[i]->codecpar->format, 0)) ||
++                    (ret = av_opt_set_sample_fmt(hls->apio[i].swr, "out_sample_fmt", AV_SAMPLE_FMT_S16P, 0)))
++                {
++                    avcodec_free_context(&hls->apio[i].ctx);
++                    return ret;
++                }
 +                ret = swr_init(hls->apio[i].swr);
 +                if (ret < 0) {
++                    swr_free(&hls->apio[i].swr);
++                    hls->apio[i].swr = NULL;
++                    avcodec_free_context(&hls->apio[i].ctx);
 +                    return ret;
 +                }
 +                ret = avcodec_open2(hls->apio[i].ctx, hls->apio[i].ac, NULL);
 +                if (ret < 0) {
++                    swr_free(&hls->apio[i].swr);
++                    hls->apio[i].swr = NULL;
++                    avcodec_free_context(&hls->apio[i].ctx);
 +                    return ret;
 +                }
 +                hls->apio[i].fd = avpriv_tempfile("ffhlspeak-", &hls->apio[i].filename, 0, s);
 +                if (hls->apio[i].fd < 0) {
 +                    ret = errno;
 +                    av_log(s, AV_LOG_ERROR, "Could not create temporary file for peaks: %s\n", strerror(ret));
++                    swr_free(&hls->apio[i].swr);
++                    hls->apio[i].swr = NULL;
++                    avcodec_free_context(&hls->apio[i].ctx);
 +                    return AVERROR(ret);
 +                }
 +                hls->apio[i].window = av_malloc(hls->apio_winsize * sizeof(int16_t));
 +                if (!hls->apio[i].window) {
++                    if (close(hls->apio[i].fd) == 0) {
++                        hls->apio[i].fd = -1;
++                    }
++                    if (unlink(hls->apio[i].filename) == 0) {
++                        hls->apio[i].filename = NULL;
++                    }
++                    swr_free(&hls->apio[i].swr);
++                    hls->apio[i].swr = NULL;
++                    avcodec_free_context(&hls->apio[i].ctx);
 +                    return AVERROR(ENOMEM);
 +                }
 +            }
@@ -424,7 +455,7 @@ index 7d97ce1789..ffd53d200b 100644
      if ((hls->start_sequence_source_type == HLS_START_SEQUENCE_AS_SECONDS_SINCE_EPOCH) ||
          (hls->start_sequence_source_type == HLS_START_SEQUENCE_AS_MICROSECONDS_SINCE_EPOCH) ||
          (hls->start_sequence_source_type == HLS_START_SEQUENCE_AS_FORMATTED_DATETIME)) {
-@@ -3180,6 +3459,9 @@ static const AVOption options[] = {
+@@ -3180,6 +3490,9 @@ static const AVOption options[] = {
      {"timeout", "set timeout for socket I/O operations", OFFSET(timeout), AV_OPT_TYPE_DURATION, { .i64 = -1 }, -1, INT_MAX, .flags = E },
      {"ignore_io_errors", "Ignore IO errors for stable long-duration runs with network output", OFFSET(ignore_io_errors), AV_OPT_TYPE_BOOL, { .i64 = 0 }, 0, 1, E },
      {"headers", "set custom HTTP headers, can override built in default headers", OFFSET(headers), AV_OPT_TYPE_STRING, { .str = NULL }, 0, 0, E },
@@ -435,7 +466,7 @@ index 7d97ce1789..ffd53d200b 100644
  };
  
 diff --git a/libavformat/hlsplaylist.c b/libavformat/hlsplaylist.c
-index 0e1dcc087f..8a8e7c95ba 100644
+index 0e1dcc087f..d49cf3be9d 100644
 --- a/libavformat/hlsplaylist.c
 +++ b/libavformat/hlsplaylist.c
 @@ -28,6 +28,17 @@
@@ -472,7 +503,7 @@ index 0e1dcc087f..8a8e7c95ba 100644
      }
 +
 +    if (peakfilename && peakfd) {
-+        int ret;
++        ssize_t ret;
 +        double buffer[BUFSIZ];
 +        int header = 0;
 +
@@ -480,7 +511,7 @@ index 0e1dcc087f..8a8e7c95ba 100644
 +            *peakfd = avpriv_open(peakfilename, O_RDONLY);
 +            if (*peakfd < 0) {
 +                av_log(NULL, AV_LOG_WARNING, "open() error in ff_hls_write_file_entry\n");
-+                goto post_apio;
++                goto post;
 +            }
 +        }
 +
@@ -489,7 +520,7 @@ index 0e1dcc087f..8a8e7c95ba 100644
 +                avio_printf(out, "#EXT-X-LOUDNESS:UNIT=dBFS,SPP=%.4lf,PEAKS=", spp);
 +                header = 1;
 +            }
-+            for (int i = 0, n = ret / sizeof(double); i < n; ++i) {
++            for (size_t i = 0, n = ret / sizeof(double); i < n; ++i) {
 +                avio_printf(out, "%.1lf%c", buffer[i], i + 1 < n ? ',' : '\n');
 +            }
 +        }
@@ -504,7 +535,7 @@ index 0e1dcc087f..8a8e7c95ba 100644
 +            av_log(NULL, AV_LOG_WARNING, "read error in ff_hls_write_file_entry\n");
 +        }
 +    }
-+post_apio:
++post:
      if (baseurl)
          avio_printf(out, "%s", baseurl);
      avio_printf(out, "%s\n", filename);
