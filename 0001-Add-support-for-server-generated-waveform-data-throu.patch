@@ -1,4 +1,4 @@
-From 9ffc8d865abb7ff11cc10ccacafa349c7e8cac30 Mon Sep 17 00:00:00 2001
+From f55f9085246f6a8e20148e34742069b0bd191ced Mon Sep 17 00:00:00 2001
 From: "F. Moukayed" <7354509+fmqa@users.noreply.github.com>
 Date: Sat, 29 May 2021 12:52:03 +0000
 Subject: [PATCH] Add support for server-generated waveform data through a
@@ -6,10 +6,10 @@ Subject: [PATCH] Add support for server-generated waveform data through a
 
 ---
  libavformat/dashenc.c     |   2 +-
- libavformat/hlsenc.c      | 379 +++++++++++++++++++++++++++++++++++++-
+ libavformat/hlsenc.c      | 381 +++++++++++++++++++++++++++++++++++++-
  libavformat/hlsplaylist.c |  49 ++++-
  libavformat/hlsplaylist.h |   3 +-
- 4 files changed, 427 insertions(+), 6 deletions(-)
+ 4 files changed, 429 insertions(+), 6 deletions(-)
 
 diff --git a/libavformat/dashenc.c b/libavformat/dashenc.c
 index 81a5c2b452..ba7b74f5b0 100644
@@ -25,7 +25,7 @@ index 81a5c2b452..ba7b74f5b0 100644
              av_log(os->ctx, AV_LOG_WARNING, "ff_hls_write_file_entry get error\n");
          }
 diff --git a/libavformat/hlsenc.c b/libavformat/hlsenc.c
-index 7d97ce1789..983aa0cbc9 100644
+index 7d97ce1789..93cd2e0d82 100644
 --- a/libavformat/hlsenc.c
 +++ b/libavformat/hlsenc.c
 @@ -44,6 +44,8 @@
@@ -443,7 +443,7 @@ index 7d97ce1789..983aa0cbc9 100644
  
  static int hls_init(AVFormatContext *s)
  {
-@@ -2925,6 +3216,85 @@ static int hls_init(AVFormatContext *s)
+@@ -2925,6 +3216,87 @@ static int hls_init(AVFormatContext *s)
          }
      }
  
@@ -487,6 +487,8 @@ index 7d97ce1789..983aa0cbc9 100644
 +                    (ret = av_opt_set_sample_fmt(hls->apio[i].swr, "in_sample_fmt", s->streams[i]->codecpar->format, 0)) ||
 +                    (ret = av_opt_set_sample_fmt(hls->apio[i].swr, "out_sample_fmt", AV_SAMPLE_FMT_S16P, 0)))
 +                {
++                    swr_free(&hls->apio[i].swr);
++                    hls->apio[i].swr = NULL;
 +                    avcodec_free_context(&hls->apio[i].ctx);
 +                    return ret;
 +                }
@@ -529,7 +531,7 @@ index 7d97ce1789..983aa0cbc9 100644
      if ((hls->start_sequence_source_type == HLS_START_SEQUENCE_AS_SECONDS_SINCE_EPOCH) ||
          (hls->start_sequence_source_type == HLS_START_SEQUENCE_AS_MICROSECONDS_SINCE_EPOCH) ||
          (hls->start_sequence_source_type == HLS_START_SEQUENCE_AS_FORMATTED_DATETIME)) {
-@@ -3180,6 +3550,9 @@ static const AVOption options[] = {
+@@ -3180,6 +3552,9 @@ static const AVOption options[] = {
      {"timeout", "set timeout for socket I/O operations", OFFSET(timeout), AV_OPT_TYPE_DURATION, { .i64 = -1 }, -1, INT_MAX, .flags = E },
      {"ignore_io_errors", "Ignore IO errors for stable long-duration runs with network output", OFFSET(ignore_io_errors), AV_OPT_TYPE_BOOL, { .i64 = 0 }, 0, 1, E },
      {"headers", "set custom HTTP headers, can override built in default headers", OFFSET(headers), AV_OPT_TYPE_STRING, { .str = NULL }, 0, 0, E },
