@@ -177,6 +177,10 @@ sed -n 's/^#EXT-X-LOUDNESS:.*,PEAKS=\(.*\)$/\1/p' /tmp/stream.m3u8 | paste -sd, 
 
 ![VOD pxample plot](plot-vod-dBFS.png)
 
+# Tests
+
+A [BATS](https://github.com/bats-core/bats-core) testsuite that checks the output levels against a number of predefined audio waveforms ist available under `test/`. Note that the environment variable `FFMPEG` must be set to the path of an `ffmpeg` binary built with this patch before running the tests.
+
 # Disclaimer
 
 This is experimental code and no guarantee, warranty or support is provided whatsoever.
