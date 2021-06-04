@@ -1,4 +1,4 @@
-From f64b2cf25b749bf1c45d1ea5aae4d4600d20a782 Mon Sep 17 00:00:00 2001
+From 6f1ab432db539e963918761a8b96043996d6e034 Mon Sep 17 00:00:00 2001
 From: "F. Moukayed" <7354509+fmqa@users.noreply.github.com>
 Date: Sat, 29 May 2021 12:52:03 +0000
 Subject: [PATCH] Add support for server-generated waveform data through a
@@ -25,7 +25,7 @@ index 81a5c2b452..ba7b74f5b0 100644
              av_log(os->ctx, AV_LOG_WARNING, "ff_hls_write_file_entry get error\n");
          }
 diff --git a/libavformat/hlsenc.c b/libavformat/hlsenc.c
-index 7d97ce1789..73cc5ad097 100644
+index 7d97ce1789..8a636d2b37 100644
 --- a/libavformat/hlsenc.c
 +++ b/libavformat/hlsenc.c
 @@ -44,6 +44,8 @@
@@ -160,7 +160,7 @@ index 7d97ce1789..73cc5ad097 100644
 +    while ((ret = read(apio->fd, apio->window, sizeof(int16_t) * hls->apio_winsize)) > 0) {
 +        size_t n = ret / sizeof(int16_t);
 +        /* Compute window dBFS */
-+        rmsbuf[rmsidx++] = fmax(-96.0, 20 * log10(sqrt(ssqri16(n, apio->window) / n))) + 3.0103;
++        rmsbuf[rmsidx++] = fmax(-96.329599, 20 * log10(sqrt(ssqri16(n, apio->window) / n))) + 3.0103;
 +        if (rmsidx >= BUFSIZ) {
 +            ret = write(en->peakfd, rmsbuf, rmsidx * sizeof(double));
 +            if (ret != rmsidx * sizeof(double)) {
