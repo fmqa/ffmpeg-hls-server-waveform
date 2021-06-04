@@ -1,0 +1,13 @@
+1..12
+ok 1 silent file has loudness <= -80 dBFS
+ok 2 sine tone with ~ -3dBFS produces expected loudness levels (~ -3..0 dBFS on average)
+ok 3 sine tone with ~ -20dBFS produces expected loudness levels (~ -20dBFS on average)
+ok 4 sine tone with ~ -20dBFS (44.1kHz) produces expected loudness levels (~ -20dBFS on average)
+ok 5 tv test tone with ~ -20dBFS (44.1kHz) produces expected loudness levels (~ -20dBFS on average)
+ok 6 EN 50332-1 program simulation noise produces loudness levels around ~ -13dBFS
+ok 7 silent file has loudness <= -80 dBFS [MP3]
+ok 8 sine tone with ~ -3dBFS produces expected loudness levels (~ -3..0 dBFS on average) [MP3]
+ok 9 sine tone with ~ -20dBFS produces expected loudness levels (~ -20dBFS on average) [MP3]
+ok 10 sine tone with ~ -20dBFS (44.1kHz) produces expected loudness levels (~ -20dBFS on average) [MP3]
+ok 11 tv test tone with ~ -20dBFS (44.1kHz) produces expected loudness levels (~ -20dBFS on average) [MP3]
+ok 12 EN 50332-1 program simulation noise produces loudness levels around ~ -13dBFS [MP3]
