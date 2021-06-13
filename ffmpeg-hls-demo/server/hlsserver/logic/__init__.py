@@ -1,16 +1,17 @@
 from base64 import urlsafe_b64decode
 from dataclasses import asdict
 import sqlite3
+from typing import Any, Mapping
 from hlsserver.domain import PersistedRadio, Radio
 
 __all__ = ["on_startup", "on_cleanup", "add", "index", "select", "delete"]
 
-async def on_startup(state):
+async def on_startup(state: Mapping[str, Any]):
     state["db"] = sqlite3.connect(":memory:")
     state["db"].row_factory = sqlite3.Row
     state["db"].execute("CREATE TABLE radios(name text primary key, url text)")
 
-async def on_cleanup(state):
+async def on_cleanup(state: Mapping[str, Any]):
     if "db" in state:
         state["db"].close()
         del state["db"]

@@ -1,11 +1,10 @@
 import asyncio
-from asyncio.exceptions import CancelledError
 from contextlib import AsyncExitStack
 import shutil
 from pathlib import Path
 import subprocess
 from tempfile import TemporaryDirectory
-from typing import Dict
+from typing import Any, Dict, Mapping
 from aiohttp import web
 from hlsserver.domain import PersistedRadio
 from hlsserver.hls.exceptions import ProcessLimitError
@@ -14,14 +13,12 @@ __all__ = ["on_startup", "on_cleanup", "start", "stop"]
 
 _TASKS: Dict[str, asyncio.Task] = {}
 
-async def on_startup(state: web.Application):
+async def on_startup(state: Mapping[str, Any]):
     state["assets"] = TemporaryDirectory(suffix="-hlsserv")
     state.router.add_static("/hls", state["assets"].name, show_index=True, follow_symlinks=True)
 
-async def on_cleanup(state: web.Application):
-    for task in _TASKS.values():
-        task.cancel()
-    await asyncio.gather(*_TASKS.values())
+async def on_cleanup(state: Mapping[str, Any]):
+    await asyncio.gather(*[task for task in _TASKS.values() if task.cancel()])
     if "assets" in state:
         state["assets"].cleanup()
         del state["assets"]
@@ -44,10 +41,7 @@ async def _stream(radio: PersistedRadio, workspace: Path, ffmpeg: Path, filename
         )
         S.push_async_callback(process.wait)
         S.callback(process.terminate)
-        try:
-            await process.wait()
-        except CancelledError:
-            pass
+        await process.wait()
 
 async def start(radio: PersistedRadio, *, assets: TemporaryDirectory, ffmpeg: Path, **kwargs):
     if radio.key in _TASKS:
@@ -58,5 +52,9 @@ async def start(radio: PersistedRadio, *, assets: TemporaryDirectory, ffmpeg: Pa
     _TASKS[radio.key].add_done_callback(lambda *args: _TASKS.__delitem__(radio.key))
 
 async def stop(radio: PersistedRadio, **kwargs):
-    if radio.key in _TASKS:
-        _TASKS[radio.key].cancel()
+    try:
+        task = _TASKS[radio.key]
+    except KeyError:
+        return
+    task.cancel()
+    await task

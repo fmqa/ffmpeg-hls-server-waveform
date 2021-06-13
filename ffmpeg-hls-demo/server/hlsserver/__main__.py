@@ -34,7 +34,7 @@ def install(module, *, into: web.Application, under: Optional[str] = None):
                     if under is not None:
                         into[under] = module
 
-def radio(routes: web.RouteTableDef, *, prefix=""):
+def radio(routes: web.RouteTableDef, *, prefix: str = ""):
     @routes.post(prefix)
     async def post(request: web.Request):
         listener = request.app["listener"]
