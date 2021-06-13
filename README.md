@@ -1,5 +1,7 @@
 # FFmpeg patch/extension for embedding audio loudness data in an HLS playlist
 
+![Demo app](peaks_canvas.png)
+
 ## Synopsis
 
 This is an experimental patch for ffmpeg/libavformat 4.4 that adds some additional options to allow embedding of loudness data in an HLS playlist with a custom `EXT-X-LOUDNESS` header attached to every segment.
@@ -179,7 +181,11 @@ sed -n 's/^#EXT-X-LOUDNESS:.*,PEAKS=\(.*\)$/\1/p' /tmp/stream.m3u8 | paste -sd, 
 
 # Tests
 
-A [BATS](https://github.com/bats-core/bats-core) testsuite that checks the output levels against a number of predefined audio waveforms ist available under `test/`. Note that the environment variable `FFMPEG` must be set to the path of an `ffmpeg` binary built with this patch before running the tests.
+A [BATS](https://github.com/bats-core/bats-core) testsuite that checks the output levels against a number of predefined audio waveforms is available under `test/`. Note that the environment variable `FFMPEG` must be set to the path of an `ffmpeg` binary built with this patch before running the tests.
+
+# Demo application
+
+`ffmoeg-hls-demo/` contains a simple [hls.js](https://github.com/video-dev/hls.js/) + [aiohttp](https://github.com/aio-libs/aiohttp) application that transcodes a live web audio stream as HLS and displays loudness levels on a HTML canvas. This provides an example on how this extension may be used within a web application. Note that an ffmpeg binary is required to run the demo, and the `start:server` must be edited to point to the binary location.
 
 # Disclaimer
 

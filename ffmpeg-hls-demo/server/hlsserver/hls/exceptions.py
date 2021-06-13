@@ -1,0 +1,2 @@
+class ProcessLimitError(Exception):
+    pass
